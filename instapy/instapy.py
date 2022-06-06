@@ -15,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 from math import ceil
 from platform import python_version
 from sys import platform
+import pandas as pd
 
 import requests
 from selenium import webdriver
@@ -369,6 +370,7 @@ class InstaPy:
             extra = {"username": self.username}
             logger_formatter = logging.Formatter(
                 "%(levelname)s [%(asctime)s] [%(username)s]  %(message)s",
+                #"%(levelname)s {%(pathname)s:%(lineno)d} [%(asctime)s] [%(username)s]  %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
             file_handler.setFormatter(logger_formatter)
@@ -380,7 +382,7 @@ class InstaPy:
 
             if show_logs is True:
                 console_handler = logging.StreamHandler()
-                console_handler.setLevel(logging.DEBUG)
+                console_handler.setLevel(logging.INFO)
                 console_handler.setFormatter(logger_formatter)
                 logger.addHandler(console_handler)
 
@@ -1919,6 +1921,8 @@ class InstaPy:
         commented = 0
         followed = 0
         not_valid_users = 0
+        skip_all_tests = False
+
 
         # if smart hashtag is enabled
         if use_smart_hashtags is True and self.smart_hashtags != []:
@@ -1963,6 +1967,22 @@ class InstaPy:
                 continue
 
             for i, link in enumerate(links):
+
+                if skip_all_tests:
+                    web_address_navigator(self.browser, link)
+
+
+                    like_state, msg = like_image(
+                        self.browser,
+                        '',
+                        self.blacklist,
+                        self.logger,
+                        self.logfolder,
+                        liked_img,
+                    )
+                    continue
+
+
                 if self.jumps["consequent"]["likes"] >= self.jumps["limit"]["likes"]:
                     self.logger.warning(
                         "--> Like quotient reached its peak!\t~leaving "
@@ -2143,6 +2163,289 @@ class InstaPy:
                     self.logger.error("Invalid Page: {}".format(err))
 
             self.logger.info("Tag: {}".format(tag.encode("utf-8")))
+
+        self.logger.info("Liked: {}".format(liked_img))
+        self.logger.info("Already Liked: {}".format(already_liked))
+        self.logger.info("Commented: {}".format(commented))
+        self.logger.info("Followed: {}".format(followed))
+        self.logger.info("Inappropriate: {}".format(inap_img))
+        self.logger.info("Not valid users: {}\n".format(not_valid_users))
+
+        self.liked_img += liked_img
+        self.already_liked += already_liked
+        self.commented += commented
+        self.followed += followed
+        self.inap_img += inap_img
+        self.not_valid_users += not_valid_users
+
+        return self
+
+    def like_by_combined_tags(
+        self,
+        tags: list = None,
+        use_random_tags: bool = False,
+        amount: int = 50,
+        skip_top_posts: bool = True,
+        use_smart_hashtags: bool = False,
+        use_smart_location_hashtags: bool = False,
+        interact: bool = False,
+        randomize: bool = False,
+        media: str = None,
+    ):
+        """Likes (default) 50 images per given tag"""
+        self.logger.info("Tags: {}".format(tags))
+        if self.aborting:
+            return self
+
+        liked_img = 0
+        already_liked = 0
+        inap_img = 0
+        commented = 0
+        followed = 0
+        not_valid_users = 0
+        linksfile = 'linkslist.csv'
+        link_lists = pd.DataFrame()
+        #link_lists = pd.read_csv(linksfile)
+
+        # if smart hashtag is enabled
+        if use_smart_hashtags is True and self.smart_hashtags != []:
+            self.logger.info("Using smart hashtags")
+            tags = self.smart_hashtags
+        elif use_smart_location_hashtags is True and self.smart_location_hashtags != []:
+            self.logger.info("Using smart location hashtags")
+            tags = self.smart_location_hashtags
+        else:
+            # deletes white spaces in tags
+            tags = [tag.strip() for tag in tags]
+            tags = tags or []
+            self.quotient_breach = False
+
+        # if session includes like_by_tags, then randomize the tag list
+        if use_random_tags is True:
+            random.shuffle(tags)
+            for i, tag in enumerate(tags):
+                self.logger.info(
+                    "Tag list randomized: [{}/{}/{}]".format(i + 1, len(tags), tag)
+                )
+
+        for index, tag in enumerate(tags):
+            if self.quotient_breach:
+                break
+
+            self.logger.info("Tag [{}/{}]".format(index + 1, len(tags)))
+            self.logger.info("--> {}".format(tag.encode("utf-8")))
+
+            try:
+                links = get_links_for_tag(
+                    self.browser,
+                    tag,
+                    amount,
+                    skip_top_posts,
+                    randomize,
+                    media,
+                    self.logger,
+                )
+                df = pd.DataFrame()
+
+                # add column to existing df
+                df['links'] = links
+                df['tag'] = tag
+
+                link_lists = pd.concat([link_lists,df])
+            except NoSuchElementException:
+                self.logger.info("Too few images, skipping this tag")
+                continue
+        link_lists.drop_duplicates(inplace=True)
+        link_lists.reset_index(inplace=True, drop=True)
+        link_lists.to_csv(linksfile)
+        linkcount= link_lists.groupby(['links']).size()
+        vip_links = linkcount[linkcount > 1].reset_index()['links']
+
+
+        self.logger.info("Found {} pictures with combined tags".format(len(vip_links)))
+
+        for i, dflink in vip_links.iteritems():
+            link = dflinl['links']
+            if self.jumps["consequent"]["likes"] >= self.jumps["limit"]["likes"]:
+                self.logger.warning(
+                    "--> Like quotient reached its peak!\t~leaving "
+                    "Like-By-Tags activity\n"
+                )
+                self.quotient_breach = True
+                # reset jump counter after a breach report
+                self.jumps["consequent"]["likes"] = 0
+                break
+
+            self.logger.info("Like# [{}/{}]".format(i + 1, len(vip_links)))
+            self.logger.info(link)
+
+            try:
+                inappropriate, user_name, is_video, reason, scope = check_link(
+                    self.browser,
+                    link,
+                    self.dont_like,
+                    self.mandatory_words,
+                    self.mandatory_language,
+                    self.is_mandatory_character,
+                    self.mandatory_character,
+                    self.check_character_set,
+                    self.ignore_if_contains,
+                    self.logger,
+                )
+
+                if not inappropriate and self.delimit_liking:
+                    self.liking_approved = verify_liking(
+                        self.browser, self.max_likes, self.min_likes, self.logger
+                    )
+
+                if not inappropriate and self.liking_approved:
+                    # validate user
+                    validation, details = self.validate_user_call(user_name)
+                    if validation is not True:
+                        self.logger.info(details)
+                        not_valid_users += 1
+                        continue
+                    else:
+                        web_address_navigator(self.browser, link)
+
+                    # try to like
+                    like_state, msg = like_image(
+                        self.browser,
+                        user_name,
+                        self.blacklist,
+                        self.logger,
+                        self.logfolder,
+                        liked_img,
+                    )
+
+                    if like_state is True or self.do_comment_liked_photo:
+                        if self.do_comment_liked_photo:
+                            already_liked += 1
+                        else:
+                            liked_img += 1
+                            # reset jump counter after a successful like
+                            self.jumps["consequent"]["likes"] = 0
+
+                        checked_img = True
+                        temp_comments = []
+
+                        commenting = (
+                            random.randint(0, 100) <= self.comment_percentage
+                        )
+                        following = random.randint(0, 100) <= self.follow_percentage
+
+                        if self.use_clarifai and (following or commenting):
+                            try:
+                                (
+                                    checked_img,
+                                    temp_comments,
+                                    clarifai_tags,
+                                ) = self.query_clarifai()
+
+                            except Exception as err:
+                                self.logger.error(
+                                    "Image check error: {}".format(err)
+                                )
+
+                        # comments
+                        if (
+                            self.do_comment
+                            and user_name not in self.dont_include
+                            and checked_img
+                            and commenting
+                        ):
+                            comments = self.comments + (
+                                self.video_comments
+                                if is_video
+                                else self.photo_comments
+                            )
+                            success = process_comments(
+                                comments,
+                                temp_comments,
+                                self.delimit_commenting,
+                                self.max_comments,
+                                self.min_comments,
+                                self.comments_mandatory_words,
+                                self.username,
+                                user_name,  # Comments with target user
+                                self.blacklist,
+                                self.browser,
+                                link,
+                                self.logger,
+                                self.logfolder,
+                            )
+
+                            if success:
+                                commented += 1
+                        else:
+                            self.logger.info("--> Not commented")
+                            sleep(1)
+
+                        # following
+                        if (
+                            self.do_follow
+                            and user_name not in self.dont_include
+                            and checked_img
+                            and following
+                            and not follow_restriction(
+                                "read", user_name, self.follow_times, self.logger
+                            )
+                        ):
+
+                            follow_state, msg = follow_user(
+                                self.browser,
+                                "post",
+                                self.username,
+                                user_name,
+                                None,
+                                self.blacklist,
+                                self.logger,
+                                self.logfolder,
+                            )
+                            if follow_state is True:
+                                followed += 1
+                        else:
+                            self.logger.info("--> Not following")
+                            sleep(1)
+
+                        # interactions (if any)
+                        if interact:
+                            self.logger.info(
+                                "--> User gonna be interacted: '{}'".format(
+                                    user_name
+                                )
+                            )
+
+                            # disable revalidating user in like_by_users
+                            with self.feature_in_feature("like_by_users", False):
+                                self.like_by_users(
+                                    user_name,
+                                    self.user_interact_amount,
+                                    self.user_interact_random,
+                                    self.user_interact_media,
+                                )
+
+                    elif msg == "already liked":
+                        already_liked += 1
+
+                    elif msg == "block on likes":
+                        break
+
+                    elif msg == "jumped":
+                        # will break the loop after certain consecutive
+                        # jumps
+                        self.jumps["consequent"]["likes"] += 1
+
+                else:
+                    self.logger.info(
+                        "--> Image not liked: {}".format(reason.encode("utf-8"))
+                    )
+                    inap_img += 1
+
+            except NoSuchElementException as err:
+                self.logger.error("Invalid Page: {}".format(err))
+
+        self.logger.info("Tag: {}".format(tags))
 
         self.logger.info("Liked: {}".format(liked_img))
         self.logger.info("Already Liked: {}".format(already_liked))

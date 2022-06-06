@@ -95,12 +95,12 @@ xpath["get_comments_on_post"] = {
 xpath["get_cord_location"] = {"json_text": "//body"}
 
 xpath["get_following_status"] = {
-    "follow_button_XP": "//button[text()='Following' or \
+    "follow_button_XP": "//button/div[text()='Following' or \
                                   text()='Requested' or \
                                   text()='Follow' or \
                                   text()='Follow Back' or \
                                   text()='Unblock' and not(ancestor::*/@role = 'presentation')]",
-    "follow_span_XP_following": "//button/div/span[contains(@aria-label, 'Following')]",
+    "follow_span_XP_following": "//button/div/div/*[name()='svg' and @aria-label='Following']",
 }
 
 xpath["get_follow_requests"] = {
@@ -128,7 +128,7 @@ xpath["get_links_from_feed"] = {"get_links": "//*[contains(@class,'c-Yi7')]"}
 xpath["get_links_for_tag"] = {
     "top_elements": "//main/article/div[1]",
     "main_elem": "//main/article/div[2]",
-    "possible_post": "//span[contains(@class, 'g47SY')]",
+    "possible_post": "//span[contains(@class, '_ac2a')]",
 }
 
 xpath["get_number_of_posts"] = {
@@ -137,8 +137,9 @@ xpath["get_number_of_posts"] = {
 }
 
 xpath["get_relationship_counts"] = {
-    "following_count": "//a[contains(@href,'following') and not(contains(@href,'mutual'))]/span",
-    "followers_count": "//a[contains(@href,'followers') and not(contains(@href,'mutual'))]/span",
+    "following_count": "//a[contains(@href,'following') and not(contains(@href,'mutual'))]/div/span",
+    "followers_count": "//a[contains(@href,'followers') and not(contains(@href,'mutual'))]/div/span",
+    "posts_count": "//div[contains(text(),'posts')]/span",
     "topCount_elements": "//span[contains(@class,'g47SY')]",
 }
 
@@ -159,8 +160,10 @@ xpath["like_comment"] = {
 }
 
 xpath["like_image"] = {
-    "like": "//*[contains(@class, 'fr66n')]/button/div/*[*[local-name()='svg']/@aria-label='Like']/*",
-    "unlike": "//*[contains(@class, 'fr66n')]/button/div/*[*[local-name()='svg']/@aria-label='Unlike']/*",
+    #"like": "//*[contains(@class, 'fr66n')]/button/div/*[*[local-name()='svg']/@aria-label='Like']/*",
+    "like": '//button[./div/*[@aria-label="Like"]]',
+    #"unlike": "//*[contains(@class, 'fr66n')]/button/div/*[*[local-name()='svg']/@aria-label='Unlike']/*",
+    "unlike": "//button[./div/span/*[@aria-label='Unlike']]",
     "play": "//*/span[contains(@aria-label, 'Play')]",
 }
 
@@ -210,3 +213,10 @@ xpath["likers_from_photo"] = {
 }
 
 xpath["accept_igcookie_dialogue"] = {"accept_button": "//button[text()='Accept']"}
+
+xpath["check_image_link"] = {
+    "user_name": "//div[@class='_aaqt']/div/a",
+    "image_text": "//div/span[contains(@class,'_aacl')]/span",
+    "image_more_button":'//span/div[contains(@aria-disabled,"false") and contains(@role,"button")]',
+    "image_tags":'//span/a[contains(@role,"link")]'
+}
